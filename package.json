@@ -40,6 +40,9 @@
       "package.json"
     ],
     "win": {
+      "sign": "./scripts/noop-sign.cjs",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
