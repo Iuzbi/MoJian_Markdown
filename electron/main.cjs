@@ -88,9 +88,18 @@ function createWindow() {
     height: 940,
     minWidth: 1180,
     minHeight: 760,
-    titleBarStyle: "hiddenInset",
     backgroundColor: "#dce5e8",
     autoHideMenuBar: true,
+    titleBarStyle: "hidden",
+    ...(process.platform !== "darwin"
+        ? {
+          titleBarOverlay: {
+            color: "#edf2f6",
+            symbolColor: "#3f4d58",
+            height: 44
+          }
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
