@@ -7,12 +7,14 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "clean": "node scripts/clean.mjs",
+    "build:icons": "node scripts/generate-icons.mjs",
+    "dev": "npm run build:icons && concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build:renderer": "vite build",
     "build:main": "node scripts/build-electron.mjs",
-    "build": "npm run build:renderer && npm run build:main",
+    "build": "npm run clean && npm run build:icons && npm run build:renderer && npm run build:main",
     "dist": "npm run build && electron-builder --win nsis",
-    "start": "electron ."
+    "start": "npm run build:icons && electron ."
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -21,10 +23,12 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3",
+    "png-to-ico": "^3.0.2",
     "vite": "^7.0.0",
     "wait-on": "^8.0.1"
   },
@@ -36,17 +40,20 @@
         "ext": "md",
         "name": "Markdown Document",
         "description": "Markdown document",
-        "role": "Editor"
+        "role": "Editor",
+        "icon": "build/file-association.ico"
       },
       {
         "ext": "markdown",
         "name": "Markdown Document",
         "description": "Markdown document",
-        "role": "Editor"
+        "role": "Editor",
+        "icon": "build/file-association.ico"
       }
     ],
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
@@ -57,6 +64,7 @@
       "sign": "./scripts/noop-sign.cjs",
       "verifyUpdateCodeSignature": false,
       "signAndEditExecutable": false,
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -70,6 +78,9 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
+      "installerIcon": "build/installer.ico",
+      "uninstallerIcon": "build/installer.ico",
+      "installerHeaderIcon": "build/installer.ico",
       "include": "build/installer.nsh",
       "shortcutName": "MoJian Markdown"
     }

@@ -7,5 +7,7 @@ const root = path.resolve(__dirname, "..");
 const outDir = path.join(root, "dist-electron");
 
 await mkdir(outDir, { recursive: true });
-await copyFile(path.join(root, "electron", "main.cjs"), path.join(outDir, "main.cjs"));
-await copyFile(path.join(root, "electron", "preload.cjs"), path.join(outDir, "preload.cjs"));
+
+for (const fileName of ["main.cjs", "preload.cjs", "logger.cjs"]) {
+  await copyFile(path.join(root, "electron", fileName), path.join(outDir, fileName));
+}
