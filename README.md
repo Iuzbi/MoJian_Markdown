@@ -10,7 +10,7 @@
 
 ## 项目简介
 
-MoJian Markdown 不是网页工具，而是一款真正可安装、可分发的 Windows 桌面应用。
+MoJian Markdown 是一款真正可安装、可分发的 Windows 桌面应用。
 
 - GitHub 仓库：[Iuzbi/MoJian_Markdown](https://github.com/Iuzbi/MoJian_Markdown)
 
