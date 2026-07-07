@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { starterMarkdown } from "./sample";
 
 const APP_TITLE = "MoJian Markdown";
-const APP_VERSION = "2.0.1";
+const APP_VERSION = "2.1.1";
 
 const STORAGE_KEYS = {
   theme: "mojian.theme",
@@ -26,11 +26,20 @@ const MENU_KEYS = {
   view: "view"
 };
 
-const EMPTY_WALLPAPER_MARKDOWN = `# 欢迎使用 MoJian Markdown
+const EMPTY_WALLPAPER_MARKDOWN = `# MoJian Markdown
 
-打开一个 Markdown 文档，或者新建空白草稿开始写作。
+打开文档，或新建草稿开始编辑。`;
 
-> 当你关闭最后一个文档后，这里会保留一个简洁的欢迎界面。`;
+const HELP_SHORTCUTS = [
+  { key: "Ctrl + N", label: "新建文档" },
+  { key: "Ctrl + O", label: "打开文档" },
+  { key: "Ctrl + S", label: "保存文档" },
+  { key: "Ctrl + Shift + S", label: "另存为" },
+  { key: "Ctrl + Z", label: "撤销" },
+  { key: "Ctrl + Y", label: "恢复" },
+  { key: "Ctrl + P", label: "切换预览" },
+  { key: "Esc", label: "关闭菜单或返回编辑" }
+];
 
 const THEME_PRESETS = [
   {
@@ -348,8 +357,12 @@ function App() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null);
-  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [logStatus, setLogStatus] = useState({
+    enabled: false,
+    logDirectory: "",
+    logFilePath: ""
+  });
 
   const editorRef = useRef(null);
   const previewRef = useRef(null);
@@ -400,7 +413,6 @@ function App() {
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         setActiveMenu(null);
-        setIsHelpOpen(false);
       }
     }
 
@@ -409,6 +421,20 @@ function App() {
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    void window.mdBridge?.getLogStatus?.().then((status) => {
+      if (!disposed && status) {
+        setLogStatus(status);
+      }
+    });
+
+    return () => {
+      disposed = true;
     };
   }, []);
 
@@ -910,6 +936,40 @@ function App() {
     await window.mdBridge?.closeWindow?.();
   }
 
+  async function refreshLogStatus() {
+    const status = await window.mdBridge?.getLogStatus?.();
+    if (status) {
+      setLogStatus(status);
+    }
+    return status;
+  }
+
+  async function startLogCapture() {
+    const status = await window.mdBridge?.startLogCapture?.();
+    if (status) {
+      setLogStatus(status);
+      setStatusText("已开始抓取日志");
+    }
+  }
+
+  async function stopLogCapture() {
+    const status = await window.mdBridge?.stopLogCapture?.();
+    if (status) {
+      setLogStatus(status);
+      setStatusText("已停止抓取日志");
+    }
+  }
+
+  async function openLogDirectory() {
+    const result = await window.mdBridge?.openLogDirectory?.();
+    if (result?.ok) {
+      setStatusText("已打开日志目录");
+    } else {
+      setStatusText("无法打开日志目录");
+    }
+    await refreshLogStatus();
+  }
+
   function toggleMenu(menuKey) {
     setActiveMenu((current) => (current === menuKey ? null : menuKey));
   }
@@ -993,41 +1053,76 @@ function App() {
                 ].map((menu) => (
                   <div key={menu.key} className="menu-group">
                     <button
-                      className={`menu-trigger ${activeMenu === menu.key || (menu.key === MENU_KEYS.help && isHelpOpen) ? "active" : ""}`}
-                      onClick={() => {
-                        if (menu.key === MENU_KEYS.help) {
-                          setIsHelpOpen((value) => !value);
-                          setActiveMenu(null);
-                          return;
-                        }
-                        setIsHelpOpen(false);
-                        toggleMenu(menu.key);
-                      }}
+                      className={`menu-trigger ${activeMenu === menu.key ? "active" : ""}`}
+                      onClick={() => toggleMenu(menu.key)}
                     >
                       {menu.label}
                     </button>
 
-                    {menu.items && activeMenu === menu.key ? (
-                      <div className="menu-popup">
-                        {menu.items.map((item, index) =>
-                          item.divider ? (
-                            <div key={`divider-${menu.key}-${index}`} className="menu-divider" />
-                          ) : (
-                            <button
-                              key={`${menu.key}-${item.label}`}
-                              className={`menu-item ${item.active ? "active" : ""}`}
-                              onClick={item.onClick}
-                              disabled={item.disabled}
-                            >
-                              <div className="menu-item-main">
-                                <strong>{item.label}</strong>
-                                <small>{item.desc}</small>
+                    {activeMenu === menu.key ? (
+                      menu.key === MENU_KEYS.help ? (
+                        <div className="menu-popup help-menu-popup">
+                          <div className="help-menu-title">
+                            <strong>关于 MoJian Markdown</strong>
+                            <small>版本 {APP_VERSION}</small>
+                          </div>
+
+                          <div className="menu-divider" />
+
+                          <div className="help-shortcut-list">
+                            {HELP_SHORTCUTS.map((item) => (
+                              <div key={item.key} className="help-shortcut-row">
+                                <span className="help-shortcut-key">{item.key}</span>
+                                <span>{item.label}</span>
                               </div>
-                              {item.shortcut ? <span className="menu-shortcut">{item.shortcut}</span> : null}
-                            </button>
-                          )
-                        )}
-                      </div>
+                            ))}
+                          </div>
+
+                          <div className="menu-divider" />
+
+                          <button className="menu-item" onClick={() => void (logStatus.enabled ? stopLogCapture() : startLogCapture())}>
+                            <div className="menu-item-main">
+                              <strong>{logStatus.enabled ? "停止抓取日志" : "开始抓取日志"}</strong>
+                              <small>{logStatus.enabled ? "当前会话正在记录" : "仅在排查问题时启用"}</small>
+                            </div>
+                          </button>
+
+                          <button className="menu-item" onClick={() => void openLogDirectory()}>
+                            <div className="menu-item-main">
+                              <strong>打开日志目录</strong>
+                              <small>{logStatus.logDirectory || "logs"}</small>
+                            </div>
+                          </button>
+
+                          {logStatus.logFilePath ? (
+                            <div className="help-menu-note">
+                              当前日志
+                              <span className="help-log-path">{logStatus.logFilePath}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : menu.items ? (
+                        <div className="menu-popup">
+                          {menu.items.map((item, index) =>
+                            item.divider ? (
+                              <div key={`divider-${menu.key}-${index}`} className="menu-divider" />
+                            ) : (
+                              <button
+                                key={`${menu.key}-${item.label}`}
+                                className={`menu-item ${item.active ? "active" : ""}`}
+                                onClick={item.onClick}
+                                disabled={item.disabled}
+                              >
+                                <div className="menu-item-main">
+                                  <strong>{item.label}</strong>
+                                  <small>{item.desc}</small>
+                                </div>
+                                {item.shortcut ? <span className="menu-shortcut">{item.shortcut}</span> : null}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      ) : null
                     ) : null}
                   </div>
                 ))}
@@ -1044,14 +1139,14 @@ function App() {
               </button>
             </div>
 
-            <div className="title-center">
-              <div className="title-center-main">{currentDoc ? currentDoc.title : APP_TITLE}</div>
-              <div className="title-center-sub">
-                {currentDoc
-                  ? `${currentDoc.dirty ? "未保存更改" : "已保存"} · ${isPreviewMode ? "预览模式" : "双栏编辑"}`
-                  : `版本 ${APP_VERSION}`}
+              <div className="title-center">
+                <div className="title-center-main">{currentDoc ? currentDoc.title : APP_TITLE}</div>
+                <div className="title-center-sub">
+                  {currentDoc
+                    ? (isPreviewMode ? "预览模式" : "双栏编辑")
+                    : `版本 ${APP_VERSION}`}
+                </div>
               </div>
-            </div>
           </div>
         </header>
 
@@ -1060,31 +1155,27 @@ function App() {
             {isSidebarOpen && !isPreviewMode ? (
               <aside className="sidebar">
                 <section className="sidebar-card compact">
-                  <span className="sidebar-label">当前状态</span>
+                  <span className="sidebar-label">工作区</span>
                   <strong>{currentDoc ? currentDoc.title : "空白工作区"}</strong>
-                  <p>{currentDoc ? statusText : "还没有打开任何 Markdown 文档。"}</p>
+                  <p>{currentDoc ? statusText : "等待打开"}</p>
                 </section>
 
                 <section className="sidebar-card compact">
                   <span className="sidebar-label">文档统计</span>
-                  {metrics ? (
-                    <div className="metric-list">
-                      <div className="metric-row">
-                        <span>字符</span>
-                        <strong>{metrics.characters}</strong>
-                      </div>
-                      <div className="metric-row">
-                        <span>行数</span>
-                        <strong>{metrics.lines}</strong>
-                      </div>
-                      <div className="metric-row">
-                        <span>词数</span>
-                        <strong>{metrics.words}</strong>
-                      </div>
+                  <div className="metric-list">
+                    <div className="metric-row">
+                      <span>字符</span>
+                      <strong>{metrics ? metrics.characters : "—"}</strong>
                     </div>
-                  ) : (
-                    <p>打开文档后，这里会展示当前内容的简要统计。</p>
-                  )}
+                    <div className="metric-row">
+                      <span>行数</span>
+                      <strong>{metrics ? metrics.lines : "—"}</strong>
+                    </div>
+                    <div className="metric-row">
+                      <span>词数</span>
+                      <strong>{metrics ? metrics.words : "—"}</strong>
+                    </div>
+                  </div>
                 </section>
 
                 <section className="sidebar-card fill">
@@ -1110,7 +1201,6 @@ function App() {
                   ) : (
                     <div className="empty-card">
                       <strong>暂无最近文件</strong>
-                      <span>你打开过的文档会出现在这里，方便继续处理。</span>
                     </div>
                   )}
                 </section>
@@ -1121,14 +1211,14 @@ function App() {
               {currentDoc ? (
                 <>
                   {!isPreviewMode ? (
-                    <section className="doc-hero">
-                      <div className="doc-hero-main">
-                        <div className="doc-title-line">
-                          <h1>{currentDoc.title}</h1>
-                          {currentDoc.dirty ? <span className="dirty-dot" /> : null}
+                      <section className="doc-hero">
+                        <div className="doc-hero-main">
+                          <div className="doc-title-line">
+                            <h1>{currentDoc.title}</h1>
+                            {currentDoc.dirty ? <span className="dirty-dot" /> : null}
+                          </div>
+                          <p>{currentDoc.path || "未保存草稿"}</p>
                         </div>
-                        <p>{currentDoc.path || "未保存草稿"} · {statusText}</p>
-                      </div>
 
                       <div className="doc-hero-meta">
                         <span className="tag">{currentDoc.dirty ? "未保存" : "已保存"}</span>
@@ -1166,7 +1256,6 @@ function App() {
                         <div className="panel-head">
                           <div>
                             <span>编辑区</span>
-                            <small>编写 Markdown 内容</small>
                           </div>
                         </div>
                         <textarea
@@ -1193,7 +1282,6 @@ function App() {
                         <div className="panel-head">
                           <div>
                             <span>预览区</span>
-                            <small>{statusText}</small>
                           </div>
                         </div>
                         <article ref={previewRef} className="markdown-body preview-scroll" onScroll={handlePreviewScroll}>
@@ -1208,8 +1296,7 @@ function App() {
                   <div className="home-card">
                     <div className="home-copy">
                       <span className="tag">正式版 {APP_VERSION}</span>
-                      <h1>简洁、安静的 Markdown 工作区</h1>
-                      <p>支持本地打开、拖拽接管、单窗口处理、双栏编辑预览和全屏预览。顶部菜单保持简洁，把常用功能放回更清晰的逻辑位置。</p>
+                      <h1>安静的 Markdown 工作区</h1>
                       <div className="home-actions">
                         <button className="primary-button" onClick={() => void openDocument()}>
                           打开本地文档
@@ -1224,21 +1311,6 @@ function App() {
                       <article className="wallpaper-markdown markdown-body">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{EMPTY_WALLPAPER_MARKDOWN}</ReactMarkdown>
                       </article>
-
-                      <div className="feature-grid">
-                        <article className="feature-card">
-                          <strong>单窗口接管</strong>
-                          <span>双击 Markdown 或拖入文档时，统一交给当前窗口打开。</span>
-                        </article>
-                        <article className="feature-card">
-                          <strong>双栏编辑</strong>
-                          <span>编辑区和预览区同步滚动，宽度可自由拖动调整。</span>
-                        </article>
-                        <article className="feature-card">
-                          <strong>菜单更清晰</strong>
-                          <span>新建、保存归入“文件”，标题、列表等归入“编辑”，主题归入“视图”。</span>
-                        </article>
-                      </div>
                     </div>
                   </div>
                 </section>
@@ -1246,53 +1318,6 @@ function App() {
             </main>
           </div>
         </div>
-
-        {isHelpOpen ? (
-          <>
-            <button className="modal-mask" aria-label="关闭帮助" onClick={() => setIsHelpOpen(false)} />
-            <section className="help-panel">
-              <div className="help-panel-head">
-                <div>
-                  <h2>关于 MoJian Markdown</h2>
-                  <small>正式版 {APP_VERSION}</small>
-                </div>
-                <button className="secondary-button" onClick={() => setIsHelpOpen(false)}>
-                  关闭
-                </button>
-              </div>
-
-              <div className="help-panel-body">
-                <section>
-                  <strong>软件说明</strong>
-                  <p>MoJian Markdown 是一个面向 Windows 的 Markdown 阅读与编辑工具，强调简约、美观和稳定的桌面体验。</p>
-                </section>
-
-                <section>
-                  <strong>快捷键</strong>
-                  <ul>
-                    <li>Ctrl + N：新建文档</li>
-                    <li>Ctrl + O：打开文档</li>
-                    <li>Ctrl + S：保存文档</li>
-                    <li>Ctrl + Shift + S：另存为</li>
-                    <li>Ctrl + Z：撤销</li>
-                    <li>Ctrl + Y：恢复</li>
-                    <li>Ctrl + P：切换预览模式</li>
-                    <li>Esc：关闭菜单或退出全屏预览</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <strong>当前特性</strong>
-                  <ul>
-                    <li>支持 `.md`、`.markdown`、`.txt` 文件关联</li>
-                    <li>支持拖拽到程序窗口或快捷方式打开</li>
-                    <li>支持最近打开、主题切换、双栏联动滚动</li>
-                  </ul>
-                </section>
-              </div>
-            </section>
-          </>
-        ) : null}
 
         <div className="window-controls">
           <button className="window-control" aria-label="最小化" title="最小化" onClick={() => void minimizeWindow()}>

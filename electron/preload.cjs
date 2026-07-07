@@ -36,7 +36,11 @@ contextBridge.exposeInMainWorld("mdBridge", {
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggleMaximize"),
   closeWindow: () => ipcRenderer.invoke("window:close"),
+  getLogStatus: () => ipcRenderer.invoke("app:getLogStatus"),
   getLogFilePath: () => ipcRenderer.invoke("app:getLogFilePath"),
+  startLogCapture: () => ipcRenderer.invoke("app:startLogCapture"),
+  stopLogCapture: () => ipcRenderer.invoke("app:stopLogCapture"),
+  openLogDirectory: () => ipcRenderer.invoke("app:openLogDirectory"),
   writeLog: (level, scope, message, details) => logToMain(level, scope, message, details),
   onExternalOpen: (callback) => {
     const handler = (_event, filePath) => callback(filePath);
@@ -52,8 +56,4 @@ contextBridge.exposeInMainWorld("mdBridge", {
       ipcRenderer.removeListener("window:state", handler);
     };
   }
-});
-
-void logToMain("INFO", "preload", "preload script initialized", {
-  location: window.location.href
 });

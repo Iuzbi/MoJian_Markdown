@@ -16,7 +16,8 @@ if (-not (Test-Path -LiteralPath $ExePath)) {
   exit 1
 }
 
-$logDir = "E:\Desktop\MoJian_Debug_Logs"
+$installDir = Split-Path -Parent $ExePath
+$logDir = Join-Path $installDir "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
@@ -27,6 +28,7 @@ $tracePath = Join-Path $logDir "trace_$timestamp.json"
 $env:ELECTRON_ENABLE_LOGGING = "true"
 $env:ELECTRON_DEBUG_NOTIFICATIONS = "true"
 $env:CHROME_LOG_FILE = $stderrPath
+$env:MOJIAN_ENABLE_LOGGING = "1"
 
 $process = Start-Process -FilePath $ExePath `
   -ArgumentList "--enable-logging=file", "--v=1", "--trace-warnings" `

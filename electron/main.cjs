@@ -3,8 +3,11 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const {
-  ensureLogFile,
+  disableLogging,
+  enableLogging,
+  getLogDirectory,
   getLogFilePath,
+  getLogStatus,
   installProcessLogging,
   logError,
   logInfo,
@@ -26,7 +29,6 @@ if (!singleInstanceLock) {
 }
 
 app.disableHardwareAcceleration();
-ensureLogFile(app);
 logInfo(app, "app", "application bootstrap", {
   isDev,
   version: app.getVersion(),
@@ -193,9 +195,9 @@ function installWebContentsLogging(windowInstance) {
 }
 
 function createWindow() {
-  const windowIcon = isDev
-    ? path.join(__dirname, "..", "build", "icon.png")
-    : path.join(__dirname, "..", "dist", "icon.png");
+  const windowIcon = process.platform === "win32"
+    ? (isDev ? path.join(__dirname, "..", "build", "icon.ico") : null)
+    : (isDev ? path.join(__dirname, "..", "build", "icon.png") : path.join(__dirname, "..", "dist", "icon.png"));
 
   logInfo(app, "window", "creating browser window", {
     windowIcon,
@@ -208,7 +210,7 @@ function createWindow() {
     minWidth: 1180,
     minHeight: 760,
     backgroundColor: "#dce5e8",
-    icon: windowIcon,
+    ...(windowIcon ? { icon: windowIcon } : {}),
     autoHideMenuBar: true,
     titleBarStyle: "hidden",
     ...(process.platform !== "darwin"
@@ -443,12 +445,42 @@ ipcMain.handle("window:close", async () => {
   return { ok: true };
 });
 
+ipcMain.handle("app:getLogStatus", async () => {
+  return getLogStatus(app);
+});
+
 ipcMain.handle("app:getLogFilePath", async () => {
-  const logFilePath = ensureLogFile(app);
-  logInfo(app, "ipc", "app:getLogFilePath invoked", { logFilePath });
+  const status = getLogStatus(app);
   return {
-    logFilePath
+    enabled: status.enabled,
+    logDirectory: status.logDirectory,
+    logFilePath: status.logFilePath
   };
+});
+
+ipcMain.handle("app:startLogCapture", async () => {
+  const status = enableLogging(app, "help-menu", true);
+  logInfo(app, "ipc", "app:startLogCapture invoked", status);
+  return status;
+});
+
+ipcMain.handle("app:stopLogCapture", async () => {
+  logInfo(app, "ipc", "app:stopLogCapture invoked");
+  return disableLogging(app, "help-menu");
+});
+
+ipcMain.handle("app:openLogDirectory", async () => {
+  const logDirectory = getLogDirectory(app);
+  await fsp.mkdir(logDirectory, { recursive: true });
+  const errorMessage = await shell.openPath(logDirectory);
+
+  if (errorMessage) {
+    logWarn(app, "ipc", "app:openLogDirectory failed", { logDirectory, errorMessage });
+    return { ok: false, logDirectory, errorMessage };
+  }
+
+  logInfo(app, "ipc", "app:openLogDirectory invoked", { logDirectory });
+  return { ok: true, logDirectory };
 });
 
 ipcMain.handle("log:renderer", async (_event, payload) => {
